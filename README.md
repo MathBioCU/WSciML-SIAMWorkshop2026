@@ -2,6 +2,10 @@
 
 Welcome to the repository accompanying the 2026 SIAM workshop on Weak-form Scientific Machine Learning (WSciML)!
 
+## Initialization
+Start by running the following to allow git to properly initialize submodules:
+git clone --recurse-submodules https://github.com/MathBioCU/WSciML-SIAMWorkshop2026.git
+
 ## Running example scripts
 1. Scripts to run WSINDy and WENDy algorithms on test sets are found in the python\_scripts and matlab\_scripts folders. 
 2. Corresponding source files are found in the libs folder. 
