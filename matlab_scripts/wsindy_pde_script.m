@@ -28,15 +28,18 @@ set(0,'DefaultFigureWindowStyle','docked')
 %% load data
 
 %%% choose PDE
+
 dr = 'pde_data/';
+dr = '/home/danielmessenger/Dropbox/Boulder/research/data/WSINDy_PDE/datasets/';
 pde_names = {'burgers.mat',...          
              'KS.mat',...                
              'NLS.mat',...               
              'porous2.mat',...     
              'sod_exact.mat',...
+             'wave3D.mat'
     };
 
-pde_num = 3; % set to 0 to run on pre-loaded dataset
+pde_num = 6; % set to 0 to run on pre-loaded dataset
 
 if pde_num~=0
     pde_name = pde_names{pde_num};
@@ -49,14 +52,14 @@ end
 Uobj = wsindy_data(U_exact,xs);
 
 %%% coarsen spacetime grid
-Uobj.coarsen(4);
+Uobj.coarsen(2);
 
 %%% add noise
 Uobj.addnoise(0.25);
 
 %%% set library
-x_diffs = [0:4];%%% differential operators
-polys = [0:4]; trigs = [];%%% poly/trig functions
+x_diffs = [0:2];%%% differential operators
+polys = [0:2]; trigs = [];%%% poly/trig functions
 custom_add =  {...  %%% custom terms using term algebra
         % term('fHandle',@(u,v) exp(sin(u+u.^2))),...                               % arbitrary term specified by function handle    
         % compterm(term('ftag',2), diffOp([1,0],'stateind',2)),...                   % term nonlinear in a derivative
