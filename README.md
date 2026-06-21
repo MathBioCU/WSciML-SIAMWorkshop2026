@@ -4,6 +4,7 @@ Welcome to the repository accompanying the 2026 SIAM workshop on Weak-form Scien
 
 ## Initialization
 Start by running the following to allow git to properly initialize submodules:
+
 git clone --recurse-submodules https://github.com/MathBioCU/WSciML-SIAMWorkshop2026.git
 
 ## Running example scripts
