@@ -8,7 +8,7 @@
 % in addition, the variable true_nz_weights contains information on the true WSINDy coefficients and terms
 % used to generate the data
 
-restart_run = true;
+restart_run = false;
 
 %% add wsindy_obj_base to path
 
@@ -50,10 +50,12 @@ end
 Uobj = wsindy_data(U_exact,xs);
 
 %%% coarsen spacetime grid
-Uobj.coarsen(2);
+subsample = 1;
+Uobj.coarsen(subsample);
 
 %%% add noise
-Uobj.addnoise(0.25);
+noise_ratio = 0.3;
+Uobj.addnoise(noise_ratio);
 
 %%% set library
 x_diffs = [0:5];%%% differential operators
@@ -93,45 +95,51 @@ Mscale_W = cell2mat(Mscale);
 %%% optimization parameters
 lambdas = 10.^linspace(-4,0,50);
 threshold_scheme = 2;
+
+tic;
 [WS,loss_wsindy,its,G,b] = WS_opt().MSTLS_0(WS,'lambdas',lambdas,'M_diag',Mscale,'toggle_jointthresh',threshold_scheme,'alpha',[]);
+runtime = toc;
 
 %%% non-dimensionalized coefficients
 W_nd = cellfun(@(w,m)w./m,WS.reshape_w,Mscale,'un',0); 
 
-%% view results
-clc
+%% Diagnose
 
 fprintf('\ndata dims=');fprintf('%u ',Uobj.dims);
-fprintf('\ntf rads=');fprintf('%u ',WS.tf{1}{1}.rads);
-fprintf('\nsize G=');fprintf('%u ',size(WS.Gs{1}{1}));fprintf('\n')
 
 %%% display model
 Str_mod = WS.disp_mod;
 for j=1:WS.numeq
-    fprintf('\n----------Eq %u----------\n',j)
-    fprintf('%s=',WS.lhsterms{j}.get_str)
-    cellfun(@(s)fprintf('%s \n',s),Str_mod{j})
+    fprintf('----------Eq %i----------\n',j)
+    fprintf('%s=\n',WS.lhsterms{j}.get_str)
+    cellfun(@(s)fprintf('%s\n',s),Str_mod{j})
 end
-cellfun(@(G)fprintf('cond(g)=%1.2e \n',cond(G)),WS.G)
 
-try
-    w_true = WS.reshape_w; w_true = cellfun(@(w)w*0,w_true,'un',0);
-    for i=1:WS.numeq
-        tags = WS.lib(i).tags(:);
-        ii = ~cellfun(@(tt) isnumeric(tt),tags);
-        tags(ii) = repmat({zeros(1,Uobj.nstates+Uobj.ndims)},length(find(ii)),1);
-        w_true{i}(ismember(cell2mat(tags),true_nz_weights{i}(:,1:end-1),'rows')) = ...
-            true_nz_weights{i}(:,end);
-    end
-    cellfun(@(w,v)fprintf('coeff err=%1.2e\n',norm(w-v)/norm(v)),w_true,WS.reshape_w)
-    cellfun(@(w,v)fprintf('supp rec=%i\n',isequal(find(w),find(v))),w_true,WS.reshape_w)
-catch
-    fprintf('no model to compare to')
+fprintf('\n')
+resids = WS.res('sepcomp');
+w_support = WS.get_supp;
+
+cellfun(@(r)disp(['rel resid=',num2str(norm(r))]),resids);
+cellfun(@(s)disp(['sparsity=',num2str(length(s))]),w_support)
+fprintf('\ntf rads=');
+cellfun(@(tf)fprintf('%u ',tf.rads),WS.tf{1});
+fprintf('\nsize G =')
+cellfun(@(G) fprintf('%d ',size(G)), WS.G)
+fprintf('\ncond G =')
+fprintf('%1.1e ', cellfun(@(G)cond(G),WS.G));
+
+if exist('true_nz_weights','var')
+    w_true = inject_true_weights(WS,true_nz_weights);
+    Tps = tpscore(WS.weights,w_true);
+    fprintf('\nTPR=%1.2f',Tps)
+    E2 = norm(w_true-WS.weights)/norm(w_true);
+    fprintf('\nCoeff err=%1.2e',E2)
 end
+fprintf('\nruntime=%1.2f(s)',runtime)
 
 %%% display data
 figure(1);clf;
-n=1;
+n=1; % for 2D space problems 
 subplot(2,1,1)
 imagesc(Uobj.Uobs{n}(:,:,1))
 title('observed')
@@ -140,15 +148,17 @@ imagesc(U_exact{n}(:,:,1))
 title('ground truth')
 
 %%% plot MSTLS loss
-figure(2);clf;
-f = min(loss_wsindy(1,:));
-g = min(loss_wsindy(2,loss_wsindy(1,:)==f));
-for j=1:size(loss_wsindy,1)-1
-    loglog(loss_wsindy(end,:),loss_wsindy(j,:),'o-',g,f,'rx')
-    hold on
+if ~isempty(loss_wsindy)
+    figure(2);clf;
+    f = min(loss_wsindy(1,:));
+    g = min(loss_wsindy(2,loss_wsindy(1,:)==f));
+    for j=1:size(loss_wsindy,1)-1
+        loglog(loss_wsindy(end,:),loss_wsindy(j,:),'o-',g,f,'rx')
+        hold on
+    end
+    hold off
+    legend;
 end
-hold off
-legend({'MSTLS loss','optimal lambda'});
 
 figure(3);clf
 %%% plot residual

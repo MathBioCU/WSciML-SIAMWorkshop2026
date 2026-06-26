@@ -7,7 +7,7 @@
 % Check the file gen_ode_data for info on the parameters 
 % dependence and dimensionality of the respective ODE
 
-restart_run = true;
+restart_run = false;
 
 %% add wsindy_obj_base to path
 
@@ -36,12 +36,11 @@ ode_names = {'Linear','Logistic_Growth','Van_der_Pol','Duffing',... %1-4
 [true_nz_weights,x,t,x0,ode_name,ode_params,rhs] = gen_ode_data(ode_num,ode_params,tspan,x0,tol_ode);
 
 %% get wsindy_data object
-
 Uobj = wsindy_data(x,t);
 
 %%% Subsample data
-max_timepoints = 1000;
-Uobj.coarsen(-max_timepoints);
+subsample = -5000;
+Uobj.coarsen(subsample);
 
 %%% add noise data
 noise_ratio = 0.1;
@@ -51,6 +50,8 @@ Uobj.addnoise(noise_ratio,'seed',rng_seed);
 %%% plot data
 figure(1)
 Uobj.plotDyn;
+title(sprintf('Observed %s data: %i timepoints',ode_name,Uobj.dims))
+xlabel('t')
 
 %% select left-hand side
 
@@ -70,9 +71,14 @@ lib = library('tags',lib_tags);
 %% get test function
 
 %%% select test function family, radius selection method, spacing between tf
-tf_params = {'phifuns',optTFcos(2,0),'meth','FFT','param',1,'subinds',-4};
+phifun = 'pp';
+tau = 10^-10; tauhat = 1; max_deriv = 1;
+tf_subinds = -4;
 
-tf = testfcn(Uobj,tf_params{:});
+tf_param = {[tau tauhat max_deriv]};
+tf_args = {'phifuns',phifun,'meth','FFT','param',tf_param,'subinds',tf_subinds};
+
+tf = testfcn(Uobj,tf_args{:});
 
 %% build WSINDy linear system
 
@@ -84,7 +90,10 @@ lambdas = 10.^linspace(-4,0,200);
 toggle_jointthresh = 4;
 
 MSTLS_params = {'lambda',lambdas,'toggle_jointthresh',toggle_jointthresh};
+
+tic;
 [WS,loss_wsindy,its,G,b] = WS_opt().MSTLS(WS,MSTLS_params{:});
+runtime = toc;
 
 %% Diagnose
 
@@ -131,6 +140,7 @@ if exist('true_nz_weights','var')
     E2 = norm(w_true-WS.weights)/norm(w_true);
     fprintf('\nCoeff err=%1.2e',E2)
 end
+fprintf('\nruntime=%1.2f(s)',runtime)
 
 
 %% simulate learned and true reduced systems
