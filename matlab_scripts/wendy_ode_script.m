@@ -16,24 +16,6 @@ end
 
 set(0,'DefaultFigureWindowStyle','docked')
 
-% %% generate data (Lorenz96)
-% 
-% nstates = 5;       % Number of variables
-% F0 = 8;            % Forcing term
-% self_damping = 1;  % strength of self-damping
-% nn_coupling = 1;   % strength of nearest-neighbor forcing
-% pnn_coupling = 1;  % strength of next-nearest-neighbor damping
-% 
-% M = 2048;
-% tspan = linspace(0,10,M); % Time interval for integration
-% x0 = F0 * ones(nstates, 1) + randn(nstates, 1) * 0.1; % ICs
-% 
-% ode_function = @(t, x) lorenz96ode(t, x, nstates, F0, self_damping, nn_coupling, pnn_coupling); 
-% [t, x] = ode45(ode_function, tspan, x0); % clean data
-% [true_nz_weights,w_true] = trueweights_Lorenz96(nstates, F0, self_damping, nn_coupling, pnn_coupling); % true terms / coefficients
-% true_prod_tags = cellfun(@(w)w(:,1:end-1),true_nz_weights,'uni',0);
-% 
-
 %%
 
 ode_num = 'Lorenz';                   % select ODE from list below
@@ -51,6 +33,12 @@ w_true = cell2mat(cellfun(@(eq) eq(:,end), true_nz_weights(:),'un',0));
 true_prod_tags = cellfun(@(w)w(:,1:end-1),true_nz_weights,'uni',0);
 lib = cellfun(@(tm)library('tags',tm),true_prod_tags);
 
+nstates = length(x0);
+[lib,true_S] = true_lib(nstates,true_nz_weights);
+% x_diffs = cell2mat(true_nz_weights');
+% x_diffs = x_diffs(:,nstates+1:end-2);
+
+
 %%% coarsen data
 M_obs = 256; % number of observed timepoints
 noise_ratio = 0.25; % noise ratio
@@ -67,7 +55,7 @@ Uobj.addnoise(noise_ratio,'seed',rng_seed,'uniform',0);
 %% wendy parameters
 
 %%% test function params
-tf_type = 'Cinf'; % 'pp'
+tf_type = 'pp'; % 'pp'
 rad_type = 'FFT'; % 'FFT','direct','timefrac'
 toggle_SVD_tf = 0;
 toggle_strong_form = 0;

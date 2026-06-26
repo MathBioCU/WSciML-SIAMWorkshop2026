@@ -30,11 +30,18 @@ set(0,'DefaultFigureWindowStyle','docked')
 %%% choose PDE
 
 dr = 'pde_data/';
+dr = 'C:/Users/385570/Desktop/data/WSINDy_PDE_zenodo/';
 pde_names = {'burgers.mat',...          
              'KS.mat',...                
              'NLS.mat',...               
              'porous2.mat',...     
-             'sod_exact.mat'
+             'sod_exact.mat',...
+             'Nav_stokes.mat',...
+             'Sine_Gordon.mat',...
+             'lin_schrod2.mat',...
+             'rxn_diff.mat',...
+             'wendy_hyperKS.mat'
+         ...
     };
 
 pde_num = 3; % set to 0 to run on pre-loaded dataset
@@ -81,7 +88,12 @@ tf = testfcn(Uobj,tf_args{:});
 
 %%% scale data
 Uobj.set_scales([],'lib',lib,'tf',tf);
-tf = testfcn(Uobj,tf_args{:});
+tf = testfcn(Uobj,tf_args{:}); % must recompute test function weights
+
+%%% define wsindy_model
+if isequal(class(lhs),'cell')
+    lhs = [1,0,1];
+end
 WS = wsindy_model(Uobj,lib,tf,'lhsterms',lhs);
 
 %% solve for coefficients
