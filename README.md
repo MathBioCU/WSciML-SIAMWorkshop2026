@@ -17,7 +17,11 @@ git clone --recurse-submodules https://github.com/MathBioCU/WSciML-SIAMWorkshop2
 
 ## Additional data
 1. Several PDE datasets are located in libs/wsindy\_obj\_data/pde\_data
-2. A collection of other PDE datasets is found at https://zenodo.org/records/20787783
+2. A collection of other PDE datasets is found at https://zenodo.org/records/20787783. This can be obtained from terminal in python by 
+
+pip install zenodo-get
+zenodo\_get 20787783 
+
 3. It is recommended that workshop attendees download the data from Zenodo, can change script paths accordingly
 4. This is necessary to utilize larger datasets, such as the Navier-Stokes flow passed a cylinder data (Nav\_Stokes.mat)
 
