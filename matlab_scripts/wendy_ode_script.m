@@ -1,4 +1,12 @@
-%% add wsindy_obj_base to path
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% This script applies WENDy to ODE data. Each of the ODEs in ode_names 
+% below has associated defaults for 
+% - tspan: time domain (1d array)
+% - ode_params: ODE parameters (cell array)
+% - x0: initial conditions 
+% Check the file gen_ode_data for info on the parameters 
+% dependence and dimensionality of the respective ODE
+
 restart_run = false;
 
 %% add wsindy_obj_base to path
@@ -16,7 +24,7 @@ end
 
 set(0,'DefaultFigureWindowStyle','docked')
 
-%%
+%% load data
 
 ode_num = 'Lorenz';                   % select ODE from list below
 tol_ode = 1e-12;                      % set tolerance (abs and rel) of ode45
@@ -26,37 +34,41 @@ ode_names = {'Linear','Logistic_Growth','Van_der_Pol','Duffing',... %1-4
              'Lotka_Volterra','Lorenz','Rossler','rational',...     %5-8
              'Oregonator','Hindmarsh-Rose','Pendulum','custom'};    %9-12
 [true_nz_weights,x,t,x0,ode_name,ode_params,rhs] = gen_ode_data(ode_num,ode_params,tspan,x0,tol_ode);
-true_nz_weights = true_nz_weights(:);
-w_true = cell2mat(cellfun(@(eq) eq(:,end), true_nz_weights(:),'un',0));
 
-%%% get library
-true_prod_tags = cellfun(@(w)w(:,1:end-1),true_nz_weights,'uni',0);
-lib = cellfun(@(tm)library('tags',tm),true_prod_tags);
-
-nstates = length(x0);
-[lib,true_S] = true_lib(nstates,true_nz_weights);
-% x_diffs = cell2mat(true_nz_weights');
-% x_diffs = x_diffs(:,nstates+1:end-2);
-
-
-%%% coarsen data
-M_obs = 256; % number of observed timepoints
-noise_ratio = 0.25; % noise ratio
-
-%%% get wsindy_data object
+%% get wsindy_data object
 Uobj = wsindy_data(x,t);
-Uobj.coarsen(-M_obs); 
 
-%%% apply noise
-rng('shuffle')
+%%% Subsample data
+subsample = -250;
+Uobj.coarsen(subsample);
+
+%%% add noise data
+noise_ratio = 0.25;
 rng_seed = rng().Seed; rng(rng_seed);
-Uobj.addnoise(noise_ratio,'seed',rng_seed,'uniform',0);
+Uobj.addnoise(noise_ratio,'seed',rng_seed);
 
-%% wendy parameters
+%%% plot data
+figure(1)
+Uobj.plotDyn;
+title(sprintf('Observed %s data: %i timepoints',ode_name,Uobj.dims))
+xlabel('t')%% get wsindy_data object
+
+%% select left-hand side
+
+lhs_diff_ord = 1;
+lhs_tags = get_tags(1,[],Uobj.nstates);
+lhs = arrayfun(@(i)term('ftag',lhs_tags(i,:),'linOp',lhs_diff_ord),(1:Uobj.nstates)','uni',0);
+
+%% get library
+
+lib = true_lib(Uobj.nstates,true_nz_weights);
+
+%% hyperparameters
 
 %%% test function params
-tf_type = 'pp'; % 'pp'
+tf_type = 'Cinf'; % 'Cinf', 'pp'
 rad_type = 'FFT'; % 'FFT','direct','timefrac'
+eta = 9;
 toggle_SVD_tf = 0;
 toggle_strong_form = 0;
 subinds = -3; % subsample convolution for speed
@@ -68,10 +80,8 @@ wendy_params = {'maxits',100,'ittol',10^-4,'diag_reg',10^-inf,'trim_rows',1};
 toggle_compare = 1;
 tol_dd = 10^-12;
 
-%% WENDy
+%% test function selection 
 
-%%% get test function
-eta = 9;
 if isequal(tf_type,'Cinf')
     phifun = @(x) exp(-eta*(1-x.^2).^(-1)); 
 elseif isequal(tf_type,'pp')
@@ -113,17 +123,20 @@ else
 end
 fprintf('\ntf rads=');fprintf('%u ',tf{1}.rads);fprintf('\n')
 
-tic;
-%%% instantiate WENDy model
-wendy_model_class = [1 1];
+%% instantiate WENDy model
+
+wendy_model_class = [1 1]; % first index is covariance order, second is bias order
 WS = wendy_model(Uobj,lib,tf,wendy_model_class);
 
 %% solve for coefficients
+
+tic;
 [WS,w_its,res,res_0,CovW,RT] = WS_opt().wendy(WS,wendy_params{:});
 total_time_wendy = toc;
 
 %% results
 
+w_true = cell2mat(cellfun(@(eq) eq(:,end), true_nz_weights(:),'un',0));
 Str_mod = WS.disp_mod;
 for j=1:WS.numeq
     fprintf('\n----------Eq %u----------\n',j)
@@ -146,6 +159,7 @@ disp(['runtime(s)=',num2str(total_time_wendy)])
 disp(['num its=',num2str(size(w_its,2))])
 
 %% simulate learned and true reduced systems, display results
+
 if toggle_compare==1
     w_plot = w_its(:,end);
     rhs_learned = WS.get_rhs('w',w_plot);
@@ -154,7 +168,7 @@ if toggle_compare==1
     t_train = Uobj.grid{1};
     x0_reduced = Uobj.get_x0([]);
     [t_learned,x_learned]=ode15s(@(t,x)rhs_learned(x),t_train,x0_reduced,options_ode_sim);
-    figure(7);clf
+    figure(2);clf
     for j=1:Uobj.nstates
         subplot(Uobj.nstates,1,j)
         plot(Uobj.grid{1},Uobj.Uobs{j},'b-o',t_learned,x_learned(:,j),'r-.','linewidth',2)
@@ -164,51 +178,13 @@ if toggle_compare==1
         end
         legend({'data','learned'})
     end
-    
-    if exist('w_its','var')
-        try
-            figure(8)
-            plot_wendy;
-        catch
-            w_true = w_plot*0;
-        end
-    end
 end
 
-%% Functions
-
-function dXdt = lorenz96ode(t, X, n, F0, sd, nn, pnn)
-    % This function defines the Lorenz-96 ODE system.
-    dXdt = zeros(n, 1); % Initialize the derivative vector
-    for j = 1:n
-        % Implement the cyclic boundary conditions
-        X_prev2 = X(mod(j-3+n, n) + 1); % X_{j-2}
-        X_prev1 = X(mod(j-2+n, n) + 1); % X_{j-1}
-        X_next1 = X(mod(j, n) + 1);    % X_{j+1}
-    
-        dXdt(j) = (nn*X_next1 - pnn*X_prev2) * X_prev1 - sd*X(j) + F0;
+if exist('w_its','var')
+    try
+        figure(3)
+        plot_wendy;
+    catch
+        w_true = w_plot*0;
     end
-end
-
-function [true_nz_weights,w_true] = trueweights_Lorenz96(n, F0, sd, nn, pnn)
-
-    true_nz_weights = cell(n,1);
-
-    e = zeros(1,n);
-    e0 = e; % forcing
-    e1 = e; e1(1) = 1; % self damping
-    e2 = e; e2(2) = 1; e2(end) = 1;  % nearest neighbor forcing
-    e3 = e; e3(end) = 1; e3(end-1) = 1; % two previous damping
-    E = [e0;e1;e2;e3];
-
-    w = [F0;-sd;nn;-pnn];
-
-    true_nz_weights{1} = [E,w];
-
-    for j=2:n
-        true_nz_weights{j} = [circshift(E,j-1,2),w];
-    end
-
-    w_true = repmat(w,n,1); 
-    
 end
