@@ -7,21 +7,22 @@
 % Check the file gen_ode_data for info on the parameters 
 % dependence and dimensionality of the respective ODE
 
+%% boiler plate
+
+%%% add wsindy_obj_base to path
+scriptsdir = fileparts(matlab.desktop.editor.getActiveFilename);
+repodir = fileparts(scriptsdir);
+addpath(genpath(repodir));
+
+%%% restart with same rng seed or clear workspace and start from scratch
 restart_run = false;
-
-%% add wsindy_obj_base to path
-
-fullPathToScript = mfilename('fullpath');
-currentDir = fileparts(fullPathToScript);
-parentDir = fileparts(currentDir);
-addpath(genpath(parentDir))
-
 if ~restart_run
     rng('shuffle')
-    clear all;
     close all; 
+    clear;
 end
 
+%%% consolidate figures
 set(0,'DefaultFigureWindowStyle','docked')
 
 %% load data
@@ -43,7 +44,7 @@ subsample = -5000;
 Uobj.coarsen(subsample);
 
 %%% add noise data
-noise_ratio = 0.1;
+noise_ratio = 0.0;
 rng_seed = rng().Seed; rng(rng_seed);
 Uobj.addnoise(noise_ratio,'seed',rng_seed);
 
@@ -92,7 +93,7 @@ toggle_jointthresh = 4;
 MSTLS_params = {'lambda',lambdas,'toggle_jointthresh',toggle_jointthresh};
 
 tic;
-[WS,loss_wsindy,its,G,b] = WS_opt().MSTLS(WS,MSTLS_params{:});
+[WS,loss_wsindy,its,G,b] = WS_opt().MSTLS_0(WS,MSTLS_params{:});
 runtime = toc;
 
 %% Diagnose
@@ -102,24 +103,20 @@ fprintf('%u ',Uobj.dims);
 fprintf('\n')
 
 Str_mod = WS.disp_mod;
-for j=1:WS.numeq
-    fprintf('----------Eq %i----------\n',j)
-    fprintf('%s=\n',WS.lhsterms{j}.get_str)
-    cellfun(@(s)fprintf('%s\n',s),Str_mod{j})
-end
-
-fprintf('\n')
 resids = WS.res('sepcomp');
 w_support = WS.get_supp;
 
-cellfun(@(r)disp(['rel resid=',num2str(norm(r))]),resids);
-cellfun(@(s)disp(['sparsity=',num2str(length(s))]),w_support)
-fprintf('\ntf rads=');
-cellfun(@(tf)fprintf('%u ',tf.rads),WS.tf{1});
-fprintf('\nsize G =')
-cellfun(@(G) fprintf('%d ',size(G)), WS.G)
-fprintf('\ncond G =')
-fprintf('%1.1e ', cellfun(@(G)cond(G),WS.G));
+for j=1:WS.numeq
+    fprintf('\n----------Eq %i----------\n',j)
+    fprintf('%s=\n',WS.lhsterms{j}.get_str)
+    cellfun(@(s)fprintf('+%s\n',s),Str_mod{j})
+    fprintf('\nrel resid =%1.3e\n', norm(resids{j}))
+    fprintf('sparsity =%i\n',length(w_support{j}))
+    fprintf('tf rad = %i\n',WS.tf{1}{j}.rads);
+    [K,J] = size(WS.G{j});
+    fprintf('size G = %d %d',K,J)
+    fprintf('\ncond G = %1.1e\n',cond(WS.G{j}))
+end
 
 if ~isempty(loss_wsindy)
     figure(2);clf;
@@ -140,31 +137,36 @@ if exist('true_nz_weights','var')
     E2 = norm(w_true-WS.weights)/norm(w_true);
     fprintf('\nCoeff err=%1.2e',E2)
 end
-fprintf('\nruntime=%1.2f(s)',runtime)
+fprintf('\nruntime=%1.2f(s)\n',runtime)
 
 
 %% simulate learned and true reduced systems
 
-toggle_compare = 1; toggle_display = 1;
+toggle_compare = 1; 
+toggle_display = 1;
 if ~isempty(toggle_compare)
+
     tol_dd = 10^-12;
     x0_args = {[]};
-
-    options_ode_sim = odeset('RelTol',tol_dd,'AbsTol',tol_dd*ones(1,Uobj.nstates));
-    rhs_learned = WS.get_rhs;
     t_train = Uobj.grid{1};
+
+
+    rhs_learned = WS.get_rhs;
+    
     x0_data = Uobj.get_x0(x0_args{:});
+    options_ode_sim = odeset('RelTol',tol_dd,'AbsTol',tol_dd*ones(1,Uobj.nstates));    
     [t_learned,x_learned]=ode15s(@(t,x)rhs_learned(x),t_train,x0_data,options_ode_sim);
     try
         rel_forward_err = arrayfun(@(j)norm(x_learned(:,j)-Uobj.Uobs{j})/norm(Uobj.Uobs{j}),1:Uobj.nstates);
         fprintf('\nrel forward err=')
         fprintf('%1.2e ',rel_forward_err)
     catch
+        fprintf('\nsimulation and data are on different timegrids\n')
         rel_forward_err = NaN;
     end
 
     if toggle_display
-        figure(7);clf
+        figure(3);clf
         for j=1:Uobj.nstates
             subplot(Uobj.nstates,1,j)
             plot(Uobj.grid{1},Uobj.Uobs{j},'b-o',t_learned,x_learned(:,j),'r-.','linewidth',2)

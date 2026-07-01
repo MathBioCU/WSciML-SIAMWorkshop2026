@@ -7,21 +7,22 @@
 % Check the file gen_ode_data for info on the parameters 
 % dependence and dimensionality of the respective ODE
 
+%% boiler plate
+
+%%% add wsindy_obj_base to path
+scriptsdir = fileparts(matlab.desktop.editor.getActiveFilename);
+repodir = fileparts(scriptsdir);
+addpath(genpath(repodir));
+
+%%% restart with same rng seed or clear workspace and start from scratch
 restart_run = false;
-
-%% add wsindy_obj_base to path
-
-fullPathToScript = mfilename('fullpath');
-currentDir = fileparts(fullPathToScript);
-parentDir = fileparts(currentDir);
-addpath(genpath(parentDir))
-
 if ~restart_run
     rng('shuffle')
-    clear all;
     close all; 
+    clear;
 end
 
+%%% consolidate figures
 set(0,'DefaultFigureWindowStyle','docked')
 
 %% load data

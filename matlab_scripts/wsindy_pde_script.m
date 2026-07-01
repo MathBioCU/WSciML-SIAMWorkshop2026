@@ -8,21 +8,22 @@
 % in addition, the variable true_nz_weights contains information on the true WSINDy coefficients and terms
 % used to generate the data
 
+%% boiler plate
+
+%%% add wsindy_obj_base to path
+scriptsdir = fileparts(matlab.desktop.editor.getActiveFilename);
+repodir = fileparts(scriptsdir);
+addpath(genpath(repodir));
+
+%%% restart with same rng seed or clear workspace and start from scratch
 restart_run = false;
-
-%% add wsindy_obj_base to path
-
-fullPathToScript = mfilename('fullpath');
-currentDir = fileparts(fullPathToScript);
-parentDir = fileparts(currentDir);
-addpath(genpath(parentDir))
-
 if ~restart_run
     rng('shuffle')
-    clear all;
     close all; 
+    clear;
 end
 
+%%% consolidate figures
 set(0,'DefaultFigureWindowStyle','docked')
 
 %% load data
@@ -30,7 +31,7 @@ set(0,'DefaultFigureWindowStyle','docked')
 %%% choose PDE
 
 dr = 'pde_data/';
-dr = 'C:/Users/385570/Desktop/data/WSINDy_PDE_zenodo/';
+% dr = 'C:/Users/385570/Desktop/data/WSINDy_PDE_zenodo/';
 pde_names = {'burgers.mat',...          
              'KS.mat',...                
              'NLS.mat',...               
@@ -81,7 +82,7 @@ lib = get_lib(Uobj,polys,trigs,x_diffs,custom_add,custom_remove_f,custom_remove_
 
 %%% set testfcn 
 phifun = 'pp';
-tau = 10^-10; tauhat = 2;
+tau = 10^-10; tauhat = 1.5;
 tf_param = {[tau tauhat max(x_diffs)]};
 tf_args = {'phifuns',phifun,'meth','FFT','param',tf_param,'subinds',-4};
 tf = testfcn(Uobj,tf_args{:});
